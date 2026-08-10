@@ -1,6 +1,6 @@
 # W-Twin
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21851340.svg)](https://doi.org/10.5281/zenodo.21851340)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21842460.svg)](https://doi.org/10.5281/zenodo.21842460)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -39,12 +39,12 @@ wtwin demo
 
 ## Results
 
-From the [paper](https://doi.org/10.5281/zenodo.21851340) — real nano-GPT training runs:
+From the [paper](https://doi.org/10.5281/zenodo.21842460) — real nano-GPT training runs:
 
 | Experiment           | Runs          | W-Twin             | Threshold | CUSUM                 |
 | -------------------- | ------------- | ------------------ | --------- | --------------------- |
 | Progressive drift    | 9             | **9/9 (100%)**     | 0/9 (0%)  | 0/9 (0%)              |
-| Mean detection delay | —             | **223 ± 11 steps** | —         | —                     |
+| Mean detection delay | —             | **257 steps (SD=67, CI: [209, 305], n=10)** | —         | —                     |
 | False alarm rate     | 30 clean runs | **0/30 (0%)**      | 0/30      | 0/30                  |
 | Abrupt spike         | 2             | 2/2 (+5 steps)     | 0/2       | 2/2 (+1 step, faster) |
 
@@ -245,7 +245,7 @@ python examples/train_real.py --mode weight_corrupt \
 - `suggest()` classifier not validated on labeled real failures
 - External validation on independent architectures pending
 
-Full details in Section 8 of the [paper](https://doi.org/10.5281/zenodo.21851340).
+Full details in Section 8 of the [paper](https://doi.org/10.5281/zenodo.21842460).
 
 ---
 
@@ -265,8 +265,8 @@ One data point from a real run is worth more than 10 synthetic experiments.
   title     = {W-Twin: Forecast-Based Detection of Progressive
                Neural Network Training Degradation},
   year      = {2026},
-  doi       = {10.5281/zenodo.21851340},
-  url       = {https://zenodo.org/records/21851340},
+  doi       = {10.5281/zenodo.21842460},
+  url       = {https://zenodo.org/records/21865734},
   publisher = {Zenodo}
 }
 ```
