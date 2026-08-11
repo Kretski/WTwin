@@ -104,7 +104,7 @@
         <path d="M4 15v3a2 2 0 002 2h12a2 2 0 002-2v-3M12 3v12M12 3l-4 4M12 3l4 4"/>
       </svg>
       <div class="dz-title">Drop your CSV here, or click to browse</div>
-      <div class="dz-hint">Expected columns: step, loss (also accepts iter/epoch, train_loss/val_loss)</div>
+      <div class="dz-hint">Expected columns: step, loss — production W-Twin columns are used directly when present</div>
       <input type="file" id="fileInput" accept=".csv">
     </div>
     <div class="privacy"><span class="dot"></span> Your file never leaves this browser — no upload, no server.</div>
@@ -193,13 +193,14 @@ function handleFile(file){
   const reader = new FileReader();
   reader.onload = e => {
     try {
-      const {steps, loss} = parseCSV(e.target.result);
+      const parsed = parseCSV(e.target.result);
+      const {steps, loss} = parsed;
       if (steps.length < 20) {
         showError('The file needs at least 20 rows with valid step/loss values.');
         return;
       }
-      const analysis = wTwinAnalyze(steps, loss);
-      renderResults(steps, loss, analysis);
+      const analysis = wTwinAnalyze(steps, loss, parsed.production);
+      renderResults(steps, loss, analysis, parsed.production);
     } catch (err) {
       showError('Could not parse file: ' + err.message);
     }
@@ -207,29 +208,170 @@ function handleFile(file){
   reader.readAsText(file);
 }
 
+function normalizeHeader(h){
+  return h.trim().toLowerCase()
+    .replace(/^\uFEFF/, '')
+    .replace(/[\s\-]+/g, '_');
+}
+
+function firstHeaderIndex(header, names){
+  for (const name of names){
+    const i = header.indexOf(name);
+    if (i !== -1) return i;
+  }
+  return -1;
+}
+
+function numericColumn(rows, idx){
+  if (idx === -1) return [];
+  return rows.map(cols => parseFloat(cols[idx]))
+    .filter(v => Number.isFinite(v));
+}
+
+function detectProductionColumns(header){
+  // Prefer the real production outputs when present. The demo then does not
+  // reconstruct alert/sustained/W values from the approximation below.
+  const idx = {
+    w: firstHeaderIndex(header, [
+      'wtwin_w','w_twin_w','w','w_t','wtwin_score'
+    ]),
+    flag: firstHeaderIndex(header, [
+      'wtwin_flag','wtwin_flags','wtwin_alert_flag','w_twin_flag',
+      'drift_flag','flag','flagged'
+    ]),
+    alert: firstHeaderIndex(header, [
+      'wtwin_alert','wtwin_first_alert','w_twin_alert',
+      'first_alert','alert_step','first_flag'
+    ]),
+    sustained: firstHeaderIndex(header, [
+      'wtwin_sustained_alert','wtwin_first_sustained_alert',
+      'w_twin_sustained_alert','first_sustained_alert',
+      'sustained_alert_step','sustained_step'
+    ]),
+    count: firstHeaderIndex(header, [
+      'wtwin_alert_count','wtwin_flagged_points',
+      'w_twin_alert_count','alert_count','flagged_points'
+    ]),
+    threshold: firstHeaderIndex(header, [
+      'wtwin_t','w_twin_t','wtwin_threshold','threshold'
+    ]),
+    q: firstHeaderIndex(header, [
+      'wtwin_q','w_twin_q','q'
+    ]),
+    d: firstHeaderIndex(header, [
+      'wtwin_d','w_twin_d','d'
+    ])
+  };
+
+  const found = Object.values(idx).some(i => i !== -1);
+  return found ? idx : null;
+}
+
+function parseProduction(rows, p, steps){
+  if (!p) return null;
+
+  const valueAt = (idx, i) => {
+    if (idx === -1 || !rows[i]) return NaN;
+    const v = parseFloat(rows[i][idx]);
+    return Number.isFinite(v) ? v : NaN;
+  };
+
+  const W = p.w !== -1 ? steps.map((_,i) => valueAt(p.w,i)) : null;
+  const Q = p.q !== -1 ? steps.map((_,i) => valueAt(p.q,i)) : null;
+  const D = p.d !== -1 ? steps.map((_,i) => valueAt(p.d,i)) : null;
+  const T = p.threshold !== -1 ? steps.map((_,i) => valueAt(p.threshold,i)) : null;
+
+  // A production flag column may be boolean (0/1) or contain the actual
+  // flagged step. Treat finite positive values as flagged.
+  const flags = p.flag !== -1
+    ? steps.map((_,i) => {
+        const v = valueAt(p.flag,i);
+        return Number.isFinite(v) && v > 0;
+      })
+    : null;
+
+  // Scalar production metadata may be repeated on every row or occur once.
+  // Extract the first finite value; for a per-row flag vector we derive the
+  // first flagged step instead.
+  const firstFinite = idx => {
+    if (idx === -1) return null;
+    for (let i=0;i<rows.length;i++){
+      const v = valueAt(idx,i);
+      if (Number.isFinite(v)) return v;
+    }
+    return null;
+  };
+
+  const rawAlert = firstFinite(p.alert);
+  const rawSustained = firstFinite(p.sustained);
+  const rawCount = firstFinite(p.count);
+
+  let firstAlert = rawAlert;
+  if (flags){
+    const fi = flags.findIndex(Boolean);
+    if (fi !== -1) firstAlert = steps[fi];
+  }
+
+  let firstSustainedAlert = rawSustained;
+  let sustainedIdx = null;
+  if (flags){
+    const N = 5;
+    for (let i=0;i<=flags.length-N;i++){
+      if (flags.slice(i,i+N).every(Boolean)){
+        firstSustainedAlert = steps[i];
+        sustainedIdx = i;
+        break;
+      }
+    }
+  }
+
+  let alertCount = Number.isFinite(rawCount)
+    ? rawCount
+    : (flags ? flags.filter(Boolean).length : null);
+
+  return {
+    W, Q, D, T, flags,
+    firstAlert,
+    firstSustainedAlert,
+    sustainedIdx,
+    alertCount,
+    source: 'production'
+  };
+}
+
 function parseCSV(text){
   const lines = text.trim().split(/\r?\n/);
-  const header = lines[0].split(',').map(h => h.trim().toLowerCase());
+  if (!lines.length) throw new Error('empty CSV.');
 
+  const header = lines[0].split(',').map(normalizeHeader);
   const stepNames = ['step','steps','iter','iteration','epoch'];
   const lossNames = ['loss','train_loss','training_loss','val_loss'];
 
-  let stepIdx = header.findIndex(h => stepNames.includes(h));
-  let lossIdx = header.findIndex(h => lossNames.includes(h));
+  let stepIdx = firstHeaderIndex(header, stepNames);
+  let lossIdx = firstHeaderIndex(header, lossNames);
 
   if (lossIdx === -1) throw new Error('no "loss" column found in the header row.');
 
-  const steps = [], loss = [];
-  for (let i = 1; i < lines.length; i++){
+  const rows = [];
+  for (let i=1; i<lines.length; i++){
     if (!lines[i].trim()) continue;
     const cols = lines[i].split(',');
     const l = parseFloat(cols[lossIdx]);
-    if (isNaN(l)) continue;
-    const s = stepIdx === -1 ? (steps.length + 1) : parseFloat(cols[stepIdx]);
-    steps.push(isNaN(s) ? steps.length + 1 : s);
+    if (!Number.isFinite(l)) continue;
+    rows.push(cols);
+  }
+
+  const steps = [], loss = [];
+  for (let i=0; i<rows.length; i++){
+    const cols = rows[i];
+    const l = parseFloat(cols[lossIdx]);
+    const s = stepIdx === -1 ? (i + 1) : parseFloat(cols[stepIdx]);
+    steps.push(Number.isFinite(s) ? s : i + 1);
     loss.push(l);
   }
-  return {steps, loss};
+
+  const production = parseProduction(rows, detectProductionColumns(header), steps);
+  return {steps, loss, production};
 }
 
 // ---- W-Twin core (client-side port of w_twin_detector.py) ----
@@ -265,7 +407,7 @@ function fitPowerLaw(steps, loss, fitFrac=0.3){
     predict:(t)=>best.a*Math.pow(t+1,-best.alpha)+best.c};
 }
 
-function wTwinAnalyze(steps, loss){
+function wTwinAnalyze(steps, loss, production=null){
   const fit = fitPowerLaw(steps, loss);
   const predicted = steps.map(t => fit.predict(t));
   const nFit = fit.nFit;
@@ -307,8 +449,32 @@ function wTwinAnalyze(steps, loss){
     if (allFlagged) { firstSustainedAlert = steps[i]; sustainedIdx = i; break; }
   }
 
+  // If the CSV contains real production W-Twin outputs, they are authoritative.
+  // Keep the fitted baseline only for the loss chart; do not overwrite production
+  // alert numbers with the browser-side approximation.
+  if (production){
+    return {
+      predicted,
+      Q: production.Q || Q,
+      D: production.D || D,
+      T: production.T || T,
+      W: production.W || W,
+      flags: production.flags || flags,
+      firstAlert: production.firstAlert !== null ? production.firstAlert : firstAlert,
+      alertCount: production.alertCount !== null ? production.alertCount : alertCount,
+      nFit,
+      firstSustainedAlert:
+        production.firstSustainedAlert !== null
+          ? production.firstSustainedAlert : firstSustainedAlert,
+      sustainedIdx:
+        production.sustainedIdx !== null
+          ? production.sustainedIdx : sustainedIdx,
+      dataSource: production.source
+    };
+  }
+
   return {predicted, Q, D, T, W, flags, firstAlert, alertCount, nFit,
-          firstSustainedAlert, sustainedIdx};
+          firstSustainedAlert, sustainedIdx, dataSource:'demo'};
 }
 
 function renderResults(steps, loss, a){
@@ -362,9 +528,13 @@ function renderResults(steps, loss, a){
   });
 
   results.style.display = 'block';
+  const sourceNote = a.dataSource === 'production'
+    ? 'Production W-Twin columns detected — alert statistics are read directly from the CSV.'
+    : 'No production W-Twin columns detected — browser-side approximation used.';
   document.getElementById('fitWindowNote').innerHTML =
-    '<span style="color:var(--muted)">Steps 1–' + steps[a.nFit-1] +
-    ' used to calibrate the baseline fit — excluded from flagging (not evaluated for drift).</span>';
+    '<span style="color:var(--muted)">' + sourceNote + '<br>' +
+    'Steps 1–' + steps[a.nFit-1] +
+    ' used to calibrate the baseline fit — excluded from flagging in demo mode.</span>';
   results.scrollIntoView({behavior:'smooth', block:'start'});
 }
 
