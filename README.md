@@ -131,7 +131,7 @@ wtwin monitor wandb_export.csv --loss-col train/loss --step-col _step
 wtwin monitor training_log.csv --output wtwin_scores.csv
 wtwin demo
 ```
-
+Try it without installing  demo
 ### CLI — detect + classify + suggest *(v1.2)*
 
 ```bash
