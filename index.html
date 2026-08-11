@@ -681,19 +681,6 @@ function detectProductionColumns(header){
       'flagged'
     ]),
 
-    /*
-     * IMPORTANT:
-     *
-     * wtwin_alert is NOT automatically treated as a flag vector.
-     * It may be:
-     *
-     *   1. scalar metadata: 2005
-     *   2. repeated scalar metadata: 2005,2005,2005,...
-     *   3. binary per-row alert vector: 0,0,0,1,1,...
-     *
-     * parseProduction() determines which one it is.
-     */
-
     alert: firstHeaderIndex(header, [
       'wtwin_alert',
       'wtwin_first_alert',
@@ -778,21 +765,6 @@ function finiteValues(values){
 }
 
 
-/*
- * Determine whether a numeric column is genuinely a binary
- * per-row flag series.
- *
- * Examples:
- *
- * 0,0,0,1,1,0,1  -> true
- *
- * 0,0,0,0,0       -> false
- *
- * 2005,2005,2005  -> false
- *
- * 1327,1327,1327  -> false
- */
-
 function isBinaryFlagSeries(values){
 
   const finite = finiteValues(values);
@@ -812,22 +784,10 @@ function isBinaryFlagSeries(values){
   const hasZero = finite.some(v => v === 0);
   const hasOne = finite.some(v => v === 1);
 
-  /*
-   * Require both states.
-   *
-   * This prevents a scalar value "1" repeated on every row
-   * from being interpreted as a flag vector.
-   */
-
   return hasZero && hasOne;
 
 }
 
-
-/*
- * A real production series is accepted only when most rows
- * contain finite values.
- */
 
 function validSeries(values, expectedLength){
 
@@ -842,22 +802,6 @@ function validSeries(values, expectedLength){
 
 }
 
-
-/*
- * Read a scalar metadata column safely.
- *
- * If the column is:
- *
- *   2005,2005,2005,...
- *
- * result = 2005
- *
- * If it is:
- *
- *   0,0,0,1,1,...
- *
- * result = null because that is a series.
- */
 
 function readScalarMetadata(values){
 
@@ -875,10 +819,6 @@ function readScalarMetadata(values){
     return null;
   }
 
-  /*
-   * If all finite values are equal, this is clearly scalar metadata.
-   */
-
   const first = finite[0];
 
   const allSame = finite.every(
@@ -888,13 +828,6 @@ function readScalarMetadata(values){
   if (allSame) {
     return first;
   }
-
-  /*
-   * If values are not repeated, use the first finite value
-   * only when the column name represents scalar metadata.
-   *
-   * This handles a CSV where metadata occurs only once.
-   */
 
   return first;
 
@@ -911,376 +844,121 @@ function parseProduction(rows, p, steps){
     return null;
   }
 
-
   const N = rows.length;
 
-
-  const Wraw =
-    p.w !== -1
-      ? getColumnValues(rows, p.w)
-      : null;
-
-
-  const Qraw =
-    p.q !== -1
-      ? getColumnValues(rows, p.q)
-      : null;
-
-
-  const Draw =
-    p.d !== -1
-      ? getColumnValues(rows, p.d)
-      : null;
-
-
-  const Traw =
-    p.threshold !== -1
-      ? getColumnValues(rows, p.threshold)
-      : null;
-
-
-  /*
-   * ------------------------------------------------------------
-   * REAL PER-ROW FLAG COLUMN
-   * ------------------------------------------------------------
-   */
+  const Wraw = p.w !== -1 ? getColumnValues(rows, p.w) : null;
+  const Qraw = p.q !== -1 ? getColumnValues(rows, p.q) : null;
+  const Draw = p.d !== -1 ? getColumnValues(rows, p.d) : null;
+  const Traw = p.threshold !== -1 ? getColumnValues(rows, p.threshold) : null;
 
   let flags = null;
 
   if (p.flag !== -1){
-
-    const flagValues =
-      getColumnValues(rows, p.flag);
-
+    const flagValues = getColumnValues(rows, p.flag);
     if (isBinaryFlagSeries(flagValues)){
-
-      flags = flagValues.map(
-        v => v === 1
-      );
-
+      flags = flagValues.map(v => v === 1);
     }
-
   }
-
-
-  /*
-   * ------------------------------------------------------------
-   * wtwin_alert
-   *
-   * This is the important fix.
-   *
-   * If it is 0/1 varying over time:
-   *
-   *     treat as a flag series.
-   *
-   * If it is:
-   *
-   *     2005,2005,2005,...
-   *
-   *     treat as scalar metadata.
-   *
-   * NEVER overwrite scalar metadata with a flag vector.
-   * ------------------------------------------------------------
-   */
 
   let alertScalar = null;
   let alertSeries = null;
 
   if (p.alert !== -1){
-
-    const alertValues =
-      getColumnValues(rows, p.alert);
-
+    const alertValues = getColumnValues(rows, p.alert);
     if (isBinaryFlagSeries(alertValues)){
-
-      alertSeries =
-        alertValues.map(v => v === 1);
-
+      alertSeries = alertValues.map(v => v === 1);
+    } else {
+      alertScalar = readScalarMetadata(alertValues);
     }
-
-    else{
-
-      alertScalar =
-        readScalarMetadata(alertValues);
-
-    }
-
   }
-
-
-  /*
-   * If there is no explicit wtwin_flag column but
-   * wtwin_alert itself is a binary per-row series,
-   * use that for the plotted flagged points.
-   */
 
   if (!flags && alertSeries){
-
     flags = alertSeries;
-
   }
-
-
-  /*
-   * ------------------------------------------------------------
-   * FIRST ALERT
-   * ------------------------------------------------------------
-   */
 
   let firstAlert = null;
 
-
-  /*
-   * Scalar production alert wins.
-   */
-
   if (Number.isFinite(alertScalar)){
-
     firstAlert = alertScalar;
-
-  }
-
-  /*
-   * Otherwise derive from real production flag series.
-   */
-
-  else if (flags){
-
+  } else if (flags){
     const idx = flags.findIndex(Boolean);
-
     if (idx !== -1){
-
       firstAlert = steps[idx];
-
     }
-
   }
-
-
-  /*
-   * ------------------------------------------------------------
-   * SUSTAINED ALERT
-   * ------------------------------------------------------------
-   */
 
   let firstSustainedAlert = null;
   let sustainedIdx = null;
 
-
-  /*
-   * First use explicit production metadata.
-   */
-
   if (p.sustained !== -1){
-
-    const sustainedValues =
-      getColumnValues(rows, p.sustained);
-
-    const scalar =
-      readScalarMetadata(sustainedValues);
-
+    const sustainedValues = getColumnValues(rows, p.sustained);
+    const scalar = readScalarMetadata(sustainedValues);
     if (Number.isFinite(scalar)){
-
       firstSustainedAlert = scalar;
-
-      /*
-       * Locate the corresponding step for plotting.
-       */
-
-      const idx =
-        steps.findIndex(
-          s => Number(s) === Number(scalar)
-        );
-
+      const idx = steps.findIndex(s => Number(s) === Number(scalar));
       if (idx !== -1){
         sustainedIdx = idx;
       }
-
     }
-
   }
 
-
-  /*
-   * If no explicit sustained alert exists,
-   * derive it from production flags.
-   */
-
-  if (
-    firstSustainedAlert === null &&
-    flags
-  ){
-
+  if (firstSustainedAlert === null && flags){
     const SUSTAIN_N = 5;
-
-    for (
-      let i = 0;
-      i <= flags.length - SUSTAIN_N;
-      i++
-    ){
-
+    for (let i = 0; i <= flags.length - SUSTAIN_N; i++){
       let ok = true;
-
-      for (
-        let k = 0;
-        k < SUSTAIN_N;
-        k++
-      ){
-
+      for (let k = 0; k < SUSTAIN_N; k++){
         if (!flags[i+k]){
-
           ok = false;
           break;
-
         }
-
       }
-
       if (ok){
-
-        firstSustainedAlert =
-          steps[i];
-
+        firstSustainedAlert = steps[i];
         sustainedIdx = i;
-
         break;
-
       }
-
     }
-
   }
-
-
-  /*
-   * ------------------------------------------------------------
-   * ALERT COUNT
-   * ------------------------------------------------------------
-   */
 
   let alertCount = null;
 
-
   if (p.count !== -1){
-
-    const countValues =
-      getColumnValues(rows, p.count);
-
-    const scalar =
-      readScalarMetadata(countValues);
-
+    const countValues = getColumnValues(rows, p.count);
+    const scalar = readScalarMetadata(countValues);
     if (Number.isFinite(scalar)){
-
       alertCount = scalar;
-
     }
-
   }
 
-
-  /*
-   * If no explicit count exists,
-   * count the actual production flags.
-   */
-
-  if (
-    alertCount === null &&
-    flags
-  ){
-
-    alertCount =
-      flags.filter(Boolean).length;
-
+  if (alertCount === null && flags){
+    alertCount = flags.filter(Boolean).length;
   }
 
-
-  /*
-   * ------------------------------------------------------------
-   * ACCEPT REAL PRODUCTION SIGNAL SERIES ONLY
-   * ------------------------------------------------------------
-   */
-
-  const W =
-    Wraw &&
-    validSeries(Wraw, N)
-      ? Wraw
-      : null;
-
-
-  const Q =
-    Qraw &&
-    validSeries(Qraw, N)
-      ? Qraw
-      : null;
-
-
-  const D =
-    Draw &&
-    validSeries(Draw, N)
-      ? Draw
-      : null;
-
-
-  const T =
-    Traw &&
-    validSeries(Traw, N)
-      ? Traw
-      : null;
-
-
-  /*
-   * At least one real production field must exist.
-   */
+  const W = Wraw && validSeries(Wraw, N) ? Wraw : null;
+  const Q = Qraw && validSeries(Qraw, N) ? Qraw : null;
+  const D = Draw && validSeries(Draw, N) ? Draw : null;
+  const T = Traw && validSeries(Traw, N) ? Traw : null;
 
   return {
-
-    W,
-    Q,
-    D,
-    T,
-
+    W, Q, D, T,
     flags,
-
     firstAlert,
-
     firstSustainedAlert,
-
     sustainedIdx,
-
     alertCount,
-
     source:'production',
-
     diagnostics:{
-      alertColumn:
-        p.alert !== -1,
-
+      alertColumn: p.alert !== -1,
       alertScalar,
-
-      alertSeries:
-        !!alertSeries,
-
-      flagColumn:
-        p.flag !== -1,
-
-      realFlagSeries:
-        !!flags,
-
-      productionW:
-        !!W,
-
-      productionQ:
-        !!Q,
-
-      productionD:
-        !!D,
-
-      productionT:
-        !!T
+      alertSeries: !!alertSeries,
+      flagColumn: p.flag !== -1,
+      realFlagSeries: !!flags,
+      productionW: !!W,
+      productionQ: !!Q,
+      productionD: !!D,
+      productionT: !!T
     }
-
   };
-
 }
 
 
@@ -1290,148 +968,57 @@ function parseProduction(rows, p, steps){
 
 function parseCSV(text){
 
-  const lines =
-    text
-      .replace(/\r\n/g, '\n')
-      .replace(/\r/g, '\n')
-      .split('\n')
-      .filter(line => line.trim() !== '');
+  const lines = text
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .split('\n')
+    .filter(line => line.trim() !== '');
 
   if (!lines.length){
-
     throw new Error('empty CSV.');
-
   }
 
+  const header = parseCSVLine(lines[0]).map(normalizeHeader);
 
-  const header =
-    parseCSVLine(lines[0])
-      .map(normalizeHeader);
+  const stepNames = ['step', 'steps', 'iter', 'iteration', 'epoch'];
+  const lossNames = ['loss', 'train_loss', 'training_loss', 'val_loss'];
 
-
-  const stepNames = [
-    'step',
-    'steps',
-    'iter',
-    'iteration',
-    'epoch'
-  ];
-
-
-  const lossNames = [
-    'loss',
-    'train_loss',
-    'training_loss',
-    'val_loss'
-  ];
-
-
-  const stepIdx =
-    firstHeaderIndex(
-      header,
-      stepNames
-    );
-
-
-  const lossIdx =
-    firstHeaderIndex(
-      header,
-      lossNames
-    );
-
+  const stepIdx = firstHeaderIndex(header, stepNames);
+  const lossIdx = firstHeaderIndex(header, lossNames);
 
   if (lossIdx === -1){
-
-    throw new Error(
-      'no "loss" column found in the header row.'
-    );
-
+    throw new Error('no "loss" column found in the header row.');
   }
-
 
   const rows = [];
 
-
-  for (
-    let i = 1;
-    i < lines.length;
-    i++
-  ){
-
+  for (let i = 1; i < lines.length; i++){
     const line = lines[i];
+    if (!line.trim()) continue;
+    
+    const cols = parseCSVLine(line);
+    const l = parseFloat(cols[lossIdx]);
 
-    if (!line.trim()) {
-      continue;
-    }
-
-
-    const cols =
-      parseCSVLine(line);
-
-
-    const l =
-      parseFloat(cols[lossIdx]);
-
-
-    if (!Number.isFinite(l)) {
-      continue;
-    }
-
+    if (!Number.isFinite(l)) continue;
 
     rows.push(cols);
-
   }
-
 
   const steps = [];
   const loss = [];
 
-
-  for (
-    let i = 0;
-    i < rows.length;
-    i++
-  ){
-
+  for (let i = 0; i < rows.length; i++){
     const cols = rows[i];
+    const l = parseFloat(cols[lossIdx]);
+    const s = stepIdx === -1 ? i + 1 : parseFloat(cols[stepIdx]);
 
-
-    const l =
-      parseFloat(cols[lossIdx]);
-
-
-    const s =
-      stepIdx === -1
-        ? i + 1
-        : parseFloat(cols[stepIdx]);
-
-
-    steps.push(
-      Number.isFinite(s)
-        ? s
-        : i + 1
-    );
-
-
+    steps.push(Number.isFinite(s) ? s : i + 1);
     loss.push(l);
-
   }
 
+  const production = parseProduction(rows, detectProductionColumns(header), steps);
 
-  const production =
-    parseProduction(
-      rows,
-      detectProductionColumns(header),
-      steps
-    );
-
-
-  return {
-    steps,
-    loss,
-    production
-  };
-
+  return { steps, loss, production };
 }
 
 
@@ -1439,249 +1026,65 @@ function parseCSV(text){
    W-TWIN DEMO CORE
    ============================================================ */
 
-function fitPowerLaw(
-  steps,
-  loss,
-  fitFrac = 0.3
-){
+function fitPowerLaw(steps, loss, fitFrac = 0.3){
 
-  const nFit =
-    Math.max(
-      5,
-      Math.floor(
-        steps.length * fitFrac
-      )
-    );
-
-
-  const tFit =
-    steps.slice(0, nFit);
-
-
-  const yFit =
-    loss.slice(0, nFit);
-
-
-  const c0 =
-    Math.max(
-      Math.min(...yFit) * 0.5,
-      1e-6
-    );
-
+  const nFit = Math.max(5, Math.floor(steps.length * fitFrac));
+  const tFit = steps.slice(0, nFit);
+  const yFit = loss.slice(0, nFit);
+  const c0 = Math.max(Math.min(...yFit) * 0.5, 1e-6);
 
   let best = null;
 
+  for (let k = 0; k <= 14; k++){
+    const c = (c0 * 2) * (k / 14);
+    const y = yFit.map(v => Math.max(v - c, 1e-8));
+    const logT = tFit.map(t => Math.log(t + 1));
+    const logY = y.map(v => Math.log(v));
 
-  for (
-    let k = 0;
-    k <= 14;
-    k++
-  ){
+    const n = logT.length;
+    const sumX = logT.reduce((a,b) => a+b, 0);
+    const sumY = logY.reduce((a,b) => a+b, 0);
+    const sumXY = logT.reduce((a,t,i) => a + t * logY[i], 0);
+    const sumXX = logT.reduce((a,t) => a + t * t, 0);
+    const denominator = n * sumXX - sumX * sumX;
 
-    const c =
-      (c0 * 2) * (k / 14);
-
-
-    const y =
-      yFit.map(
-        v => Math.max(
-          v - c,
-          1e-8
-        )
-      );
-
-
-    const logT =
-      tFit.map(
-        t => Math.log(t + 1)
-      );
-
-
-    const logY =
-      y.map(
-        v => Math.log(v)
-      );
-
-
-    const n =
-      logT.length;
-
-
-    const sumX =
-      logT.reduce(
-        (a,b) => a+b,
-        0
-      );
-
-
-    const sumY =
-      logY.reduce(
-        (a,b) => a+b,
-        0
-      );
-
-
-    const sumXY =
-      logT.reduce(
-        (a,t,i) =>
-          a + t * logY[i],
-        0
-      );
-
-
-    const sumXX =
-      logT.reduce(
-        (a,t) =>
-          a + t * t,
-        0
-      );
-
-
-    const denominator =
-      n * sumXX -
-      sumX * sumX;
-
-
-    if (
-      !Number.isFinite(denominator) ||
-      denominator === 0
-    ){
+    if (!Number.isFinite(denominator) || denominator === 0){
       continue;
     }
 
+    const slope = (n * sumXY - sumX * sumY) / denominator;
+    const intercept = (sumY - slope * sumX) / n;
 
-    const slope =
-      (
-        n * sumXY -
-        sumX * sumY
-      ) /
-      denominator;
+    const a = Math.exp(intercept);
+    const alpha = -slope;
+    
+    const pred = tFit.map(t => a * Math.pow(t + 1, -alpha) + c);
+    const err = pred.reduce((s,p,i) => s + (p - yFit[i]) ** 2, 0);
 
-
-    const intercept =
-      (
-        sumY -
-        slope * sumX
-      ) / n;
-
-
-    const a =
-      Math.exp(intercept);
-
-
-    const alpha =
-      -slope;
-
-
-    const pred =
-      tFit.map(
-        t =>
-          a *
-          Math.pow(
-            t + 1,
-            -alpha
-          ) +
-          c
-      );
-
-
-    const err =
-      pred.reduce(
-        (s,p,i) =>
-          s +
-          (p - yFit[i]) ** 2,
-        0
-      );
-
-
-    if (
-      !best ||
-      err < best.err
-    ){
-
-      best = {
-        err,
-        a,
-        alpha,
-        c
-      };
-
+    if (!best || err < best.err){
+      best = { err, a, alpha, c };
     }
-
   }
-
 
   if (!best){
-
-    throw new Error(
-      'could not fit scaling-law baseline.'
-    );
-
+    throw new Error('could not fit scaling-law baseline.');
   }
 
-
-  const predFit =
-    tFit.map(
-      t =>
-        best.a *
-        Math.pow(
-          t + 1,
-          -best.alpha
-        ) +
-        best.c
-    );
-
-
-  const meanY =
-    yFit.reduce(
-      (a,b) => a+b,
-      0
-    ) / yFit.length;
-
-
-  const ssTot =
-    yFit.reduce(
-      (s,y) =>
-        s +
-        (y - meanY) ** 2,
-      0
-    );
-
-
-  const ssRes =
-    predFit.reduce(
-      (s,p,i) =>
-        s +
-        (p - yFit[i]) ** 2,
-      0
-    );
-
-
-  const r2 =
-    ssTot > 0
-      ? 1 - ssRes / ssTot
-      : 0;
-
+  const predFit = tFit.map(t => best.a * Math.pow(t + 1, -best.alpha) + best.c);
+  const meanY = yFit.reduce((a,b) => a+b, 0) / yFit.length;
+  
+  const ssTot = yFit.reduce((s,y) => s + (y - meanY) ** 2, 0);
+  const ssRes = predFit.reduce((s,p,i) => s + (p - yFit[i]) ** 2, 0);
+  const r2 = ssTot > 0 ? 1 - ssRes / ssTot : 0;
 
   return {
-
-    a:best.a,
-    alpha:best.alpha,
-    c:best.c,
+    a: best.a,
+    alpha: best.alpha,
+    c: best.c,
     r2,
     nFit,
-
-    predict:
-      t =>
-        best.a *
-        Math.pow(
-          t + 1,
-          -best.alpha
-        ) +
-        best.c
-
+    predict: t => best.a * Math.pow(t + 1, -best.alpha) + best.c
   };
-
 }
 
 
@@ -1689,316 +1092,93 @@ function fitPowerLaw(
    W-TWIN ANALYSIS
    ============================================================ */
 
-function wTwinAnalyze(
-  steps,
-  loss,
-  production = null
-){
+function wTwinAnalyze(steps, loss, production = null){
 
-  const fit =
-    fitPowerLaw(
-      steps,
-      loss
-    );
+  const fit = fitPowerLaw(steps, loss);
+  const predicted = steps.map(t => fit.predict(t));
+  const nFit = fit.nFit;
+  const horizon = steps[nFit - 1] - steps[0] + 1;
 
+  const Q = steps.map(t => {
+    const extrap = Math.max(t - steps[nFit - 1], 0);
+    const decay = Math.exp(-extrap / (3 * horizon));
+    return (Math.max(0, Math.min(1, fit.r2)) * decay);
+  });
 
-  const predicted =
-    steps.map(
-      t => fit.predict(t)
-    );
-
-
-  const nFit =
-    fit.nFit;
-
-
-  const horizon =
-    steps[nFit - 1] -
-    steps[0] +
-    1;
-
-
-  const Q =
-    steps.map(t => {
-
-      const extrap =
-        Math.max(
-          t -
-          steps[nFit - 1],
-          0
-        );
-
-
-      const decay =
-        Math.exp(
-          -extrap /
-          (3 * horizon)
-        );
-
-
-      return (
-        Math.max(
-          0,
-          Math.min(
-            1,
-            fit.r2
-          )
-        ) *
-        decay
-      );
-
-    });
-
-
-  const D =
-    loss.map(
-      (l,i) =>
-        Math.abs(
-          l -
-          predicted[i]
-        ) /
-        Math.max(
-          Math.abs(
-            predicted[i]
-          ),
-          1e-8
-        )
-    );
-
+  const D = loss.map((l,i) => Math.abs(l - predicted[i]) / Math.max(Math.abs(predicted[i]), 1e-8));
 
   const residFit = [];
-
-
-  for (
-    let i = 0;
-    i < nFit;
-    i++
-  ){
-
-    residFit.push(
-      Math.abs(
-        loss[i] -
-        predicted[i]
-      ) /
-      Math.max(
-        Math.abs(
-          predicted[i]
-        ),
-        1e-8
-      )
-    );
-
+  for (let i = 0; i < nFit; i++){
+    residFit.push(Math.abs(loss[i] - predicted[i]) / Math.max(Math.abs(predicted[i]), 1e-8));
   }
 
+  const meanR = residFit.reduce((a,b) => a+b, 0) / residFit.length;
+  const sdR = Math.sqrt(residFit.reduce((s,r) => s + (r - meanR) ** 2, 0) / residFit.length);
+  const T = meanR + 2 * sdR;
+  const W = D.map((d,i) => Q[i] * d - T);
 
-  const meanR =
-    residFit.reduce(
-      (a,b) => a+b,
-      0
-    ) /
-    residFit.length;
-
-
-  const sdR =
-    Math.sqrt(
-      residFit.reduce(
-        (s,r) =>
-          s +
-          (r - meanR) ** 2,
-        0
-      ) /
-      residFit.length
-    );
-
-
-  const T =
-    meanR +
-    2 * sdR;
-
-
-  const W =
-    D.map(
-      (d,i) =>
-        Q[i] * d -
-        T
-    );
-
-
-  /*
-   * Demo flags only.
-   *
-   * The calibration region is never flagged.
-   */
-
-  const flags =
-    W.map(
-      (w,i) =>
-        w > 0 &&
-        i >= nFit
-    );
-
+  const flags = W.map((w,i) => w > 0 && i >= nFit);
 
   let firstAlert = null;
   let alertCount = 0;
 
-
-  for (
-    let i = 0;
-    i < flags.length;
-    i++
-  ){
-
+  for (let i = 0; i < flags.length; i++){
     if (flags[i]){
-
       alertCount++;
-
       if (firstAlert === null){
-
-        firstAlert =
-          steps[i];
-
+        firstAlert = steps[i];
       }
-
     }
-
   }
 
-
   const SUSTAIN_N = 5;
-
   let firstSustainedAlert = null;
   let sustainedIdx = null;
 
-
-  for (
-    let i = 0;
-    i <=
-      flags.length -
-      SUSTAIN_N;
-    i++
-  ){
-
+  for (let i = 0; i <= flags.length - SUSTAIN_N; i++){
     let allFlagged = true;
-
-
-    for (
-      let k = 0;
-      k < SUSTAIN_N;
-      k++
-    ){
-
+    for (let k = 0; k < SUSTAIN_N; k++){
       if (!flags[i+k]){
-
         allFlagged = false;
         break;
-
       }
-
     }
-
-
     if (allFlagged){
-
-      firstSustainedAlert =
-        steps[i];
-
+      firstSustainedAlert = steps[i];
       sustainedIdx = i;
-
       break;
-
     }
-
   }
-
-
-  /*
-   * ==========================================================
-   * PRODUCTION MODE
-   * ==========================================================
-   *
-   * Production statistics are authoritative.
-   *
-   * The browser does NOT replace them with its approximation.
-   */
 
   if (production){
-
     return {
-
       predicted,
-
-      Q:
-        production.Q || Q,
-
-      D:
-        production.D || D,
-
-      T:
-        production.T || T,
-
-      W:
-        production.W || W,
-
-      flags:
-        production.flags || flags,
-
-      firstAlert:
-        production.firstAlert !== null
-          ? production.firstAlert
-          : firstAlert,
-
-      alertCount:
-        production.alertCount !== null
-          ? production.alertCount
-          : alertCount,
-
+      Q: production.Q || Q,
+      D: production.D || D,
+      T: production.T || T,
+      W: production.W || W,
+      flags: production.flags || flags,
+      firstAlert: production.firstAlert !== null ? production.firstAlert : firstAlert,
+      alertCount: production.alertCount !== null ? production.alertCount : alertCount,
       nFit,
-
-      firstSustainedAlert:
-        production.firstSustainedAlert !== null
-          ? production.firstSustainedAlert
-          : firstSustainedAlert,
-
-      sustainedIdx:
-        production.sustainedIdx !== null
-          ? production.sustainedIdx
-          : sustainedIdx,
-
-      dataSource:
-        'production',
-
-      diagnostics:
-        production.diagnostics
-
+      firstSustainedAlert: production.firstSustainedAlert !== null ? production.firstSustainedAlert : firstSustainedAlert,
+      sustainedIdx: production.sustainedIdx !== null ? production.sustainedIdx : sustainedIdx,
+      dataSource: 'production',
+      diagnostics: production.diagnostics
     };
-
   }
 
-
-  /*
-   * ==========================================================
-   * DEMO MODE
-   * ==========================================================
-   */
-
   return {
-
     predicted,
-    Q,
-    D,
-    T,
-    W,
+    Q, D, T, W,
     flags,
     firstAlert,
     alertCount,
     nFit,
     firstSustainedAlert,
     sustainedIdx,
-
     dataSource:'demo'
-
   };
-
 }
 
 
@@ -2006,386 +1186,191 @@ function wTwinAnalyze(
    RENDER
    ============================================================ */
 
-function renderResults(
-  steps,
-  loss,
-  a
-){
+function renderResults(steps, loss, a){
 
-  document.getElementById(
-    'statN'
-  ).textContent =
-    steps.length;
+  document.getElementById('statN').textContent = steps.length;
+  document.getElementById('statAlert').textContent = a.firstAlert !== null ? 'step ' + a.firstAlert : '—';
+  document.getElementById('statSustained').textContent = a.firstSustainedAlert !== null ? 'step ' + a.firstSustainedAlert : 'none';
+  document.getElementById('statCount').textContent = a.alertCount !== null ? a.alertCount : '—';
 
+  const verdictEl = document.getElementById('statVerdict');
 
-  document.getElementById(
-    'statAlert'
-  ).textContent =
-    a.firstAlert !== null
-      ? 'step ' +
-        a.firstAlert
-      : '—';
-
-
-  document.getElementById(
-    'statSustained'
-  ).textContent =
-    a.firstSustainedAlert !== null
-      ? 'step ' +
-        a.firstSustainedAlert
-      : 'none';
-
-
-  document.getElementById(
-    'statCount'
-  ).textContent =
-    a.alertCount !== null
-      ? a.alertCount
-      : '—';
-
-
-  const verdictEl =
-    document.getElementById(
-      'statVerdict'
-    );
-
-
-  if (
-    a.firstSustainedAlert === null
-  ){
-
-    verdictEl.textContent =
-      'Clean';
-
-    verdictEl.className =
-      'v good';
-
+  if (a.firstSustainedAlert === null){
+    verdictEl.textContent = 'Clean';
+    verdictEl.className = 'v good';
+  } else {
+    verdictEl.textContent = 'Drift flagged';
+    verdictEl.className = 'v alert';
   }
 
-  else{
-
-    verdictEl.textContent =
-      'Drift flagged';
-
-    verdictEl.className =
-      'v alert';
-
-  }
-
-
-  /*
-   * Flagged loss points.
-   */
-
-  const alertPoints =
-    loss.map(
-      (l,i) =>
-        a.flags &&
-        a.flags[i]
-          ? l
-          : null
-    );
-
-
-  /*
-   * Sustained marker.
-   */
-
-  const sustainedPoint =
-    loss.map(
-      (l,i) =>
-        (
-          a.sustainedIdx !== null &&
-          i === a.sustainedIdx
-        )
-          ? l
-          : null
-    );
-
+  const alertPoints = loss.map((l,i) => a.flags && a.flags[i] ? l : null);
+  const sustainedPoint = loss.map((l,i) => (a.sustainedIdx !== null && i === a.sustainedIdx) ? l : null);
 
   if (lossChartInstance){
-
     lossChartInstance.destroy();
-
   }
-
 
   if (wChartInstance){
-
     wChartInstance.destroy();
-
   }
 
-
-  const gridColor =
-    '#1B212C';
-
-
-  const tickColor =
-    '#7C8698';
-
+  const gridColor = '#1B212C';
+  const tickColor = '#7C8698';
 
   /*
    * LOSS CHART
    */
-
-  lossChartInstance =
-    new Chart(
-      document.getElementById(
-        'lossChart'
-      ),
-      {
-
-        type:'line',
-
-        data:{
-
-          labels:steps,
-
-          datasets:[
-
-            {
-              label:'Observed loss',
-              data:loss,
-              borderColor:'#4FD1C5',
-              borderWidth:1.6,
-              pointRadius:0,
-              tension:0.15
-            },
-
-            {
-              label:'Expected',
-              data:a.predicted,
-              borderColor:'#5B7A99',
-              borderWidth:1.4,
-              borderDash:[4,3],
-              pointRadius:0,
-              tension:0.15
-            },
-
-            {
-              label:'Flagged',
-              data:alertPoints,
-              borderColor:'#FF6B4A',
-              backgroundColor:'#FF6B4A',
-              pointRadius:2.5,
-              showLine:false
-            },
-
-            {
-              label:'Sustained alert onset',
-              data:sustainedPoint,
-              borderColor:'#FFD23F',
-              backgroundColor:'#FFD23F',
-              pointRadius:7,
-              pointStyle:'rectRot',
-              showLine:false
-            }
-
-          ]
-
+  lossChartInstance = new Chart(
+    document.getElementById('lossChart'),
+    {
+      type:'line',
+      data:{
+        labels:steps,
+        datasets:[
+          {
+            label:'Observed loss',
+            data:loss,
+            borderColor:'#4FD1C5',
+            borderWidth:1.6,
+            pointRadius:0,
+            tension:0.1
+          },
+          {
+            label:'Expected (scaling law)',
+            data:a.predicted,
+            borderColor:'#5B7A99',
+            borderWidth:1.6,
+            borderDash:[4,4],
+            pointRadius:0,
+            tension:0.1
+          },
+          {
+            label:'Flagged point',
+            data:alertPoints,
+            borderColor:'#FF6B4A',
+            backgroundColor:'#FF6B4A',
+            borderWidth:0,
+            pointRadius:2.5,
+            showLine:false
+          },
+          {
+            label:'Sustained alert onset',
+            data:sustainedPoint,
+            borderColor:'#FFD23F',
+            backgroundColor:'#FFD23F',
+            borderWidth:0,
+            pointRadius:6,
+            pointHoverRadius:8,
+            pointStyle:'rectRot',
+            showLine:false
+          }
+        ]
+      },
+      options:{
+        responsive:true,
+        maintainAspectRatio:false,
+        interaction:{
+          mode:'index',
+          intersect:false
         },
-
-        options:
-          chartOpts(
-            gridColor,
-            tickColor
-          )
-
+        plugins:{
+          legend:{display:false},
+          tooltip:{
+            backgroundColor:'rgba(18,22,31,0.9)',
+            titleColor:'#E6E9EF',
+            bodyColor:'#7C8698',
+            borderColor:'#232936',
+            borderWidth:1
+          }
+        },
+        scales:{
+          x:{
+            grid:{color:gridColor, drawBorder:false},
+            ticks:{color:tickColor, maxTicksLimit:10}
+          },
+          y:{
+            grid:{color:gridColor, drawBorder:false},
+            ticks:{color:tickColor}
+          }
+        }
       }
-    );
+    }
+  );
 
 
   /*
    * W CHART
    */
-
-  wChartInstance =
-    new Chart(
-      document.getElementById(
-        'wChart'
-      ),
-      {
-
-        type:'line',
-
-        data:{
-
-          labels:steps,
-
-          datasets:[
-
-            {
-              label:'W(t)',
-              data:a.W,
-              borderColor:'#F2A93B',
-              borderWidth:1.4,
-              pointRadius:0,
-              tension:0.1,
-              fill:false
-            },
-
-            {
-              label:'Threshold',
-              data:
-                steps.map(
-                  () => 0
-                ),
-              borderColor:'#2A3140',
-              borderWidth:1,
-              pointRadius:0,
-              borderDash:[2,3]
-            }
-
-          ]
-
+  wChartInstance = new Chart(
+    document.getElementById('wChart'),
+    {
+      type:'line',
+      data:{
+        labels:steps,
+        datasets:[
+          {
+            label:'W(t)',
+            data:a.W,
+            borderColor:'#F2A93B',
+            borderWidth:1.4,
+            pointRadius:0,
+            tension:0.1
+          },
+          {
+            label:'Threshold (W=0)',
+            data:steps.map(()=>0),
+            borderColor:'#232936',
+            borderWidth:1.4,
+            borderDash:[4,4],
+            pointRadius:0
+          }
+        ]
+      },
+      options:{
+        responsive:true,
+        maintainAspectRatio:false,
+        interaction:{
+          mode:'index',
+          intersect:false
         },
-
-        options:
-          chartOpts(
-            gridColor,
-            tickColor
-          )
-
+        plugins:{
+          legend:{display:false},
+          tooltip:{
+            backgroundColor:'rgba(18,22,31,0.9)',
+            titleColor:'#E6E9EF',
+            bodyColor:'#7C8698',
+            borderColor:'#232936',
+            borderWidth:1
+          }
+        },
+        scales:{
+          x:{
+            grid:{color:gridColor, drawBorder:false},
+            ticks:{color:tickColor, maxTicksLimit:10}
+          },
+          y:{
+            grid:{color:gridColor, drawBorder:false},
+            ticks:{color:tickColor}
+          }
+        }
       }
-    );
-
-
-  results.style.display =
-    'block';
-
+    }
+  );
 
   /*
-   * Source note.
+   * DYNAMIC FIT WINDOW / PRODUCTION NOTE
    */
-
-  let sourceNote;
-
-
-  if (
-    a.dataSource ===
-    'production'
-  ){
-
-    sourceNote =
-      'Production W-Twin columns detected — alert statistics are read directly from the CSV.';
-
+  const fitNoteEl = document.getElementById('fitWindowNote');
+  if (a.dataSource === 'production'){
+    fitNoteEl.innerHTML = 'Production W-Twin columns detected &mdash; alert statistics are read directly from the CSV.<br>' +
+                          `Steps 1&ndash;${a.nFit} used to calibrate the baseline fit &mdash; excluded from flagging in demo mode.`;
+  } else {
+    fitNoteEl.innerHTML = `Steps 1&ndash;${a.nFit} used to calibrate the baseline fit &mdash; excluded from flagging in demo mode.`;
   }
 
-  else{
-
-    sourceNote =
-      'No production W-Twin outputs detected — browser-side approximation used.';
-
-  }
-
-
-  let fitNote =
-    '';
-
-
-  if (
-    a.dataSource ===
-    'demo'
-  ){
-
-    fitNote =
-      '<br>Steps 1–' +
-      steps[a.nFit - 1] +
-      ' used to calibrate the baseline fit — excluded from flagging in demo mode.';
-
-  }
-
-  else{
-
-    fitNote =
-      '<br>Production W-Twin alert fields are authoritative; the fitted baseline is shown only as a visual reference.';
-
-  }
-
-
-  document.getElementById(
-    'fitWindowNote'
-  ).innerHTML =
-
-    '<span style="color:var(--muted)">' +
-    sourceNote +
-    fitNote +
-    '</span>';
-
-
-  results.scrollIntoView({
-    behavior:'smooth',
-    block:'start'
-  });
-
-}
-
-
-/* ============================================================
-   CHART OPTIONS
-   ============================================================ */
-
-function chartOpts(
-  gridColor,
-  tickColor
-){
-
-  return {
-
-    responsive:true,
-
-    maintainAspectRatio:false,
-
-    plugins:{
-      legend:{
-        display:false
-      }
-    },
-
-    scales:{
-
-      x:{
-        grid:{
-          color:gridColor
-        },
-
-        ticks:{
-          color:tickColor,
-          maxTicksLimit:10,
-          font:{
-            size:10
-          }
-        }
-
-      },
-
-      y:{
-        grid:{
-          color:gridColor
-        },
-
-        ticks:{
-          color:tickColor,
-          font:{
-            size:10
-          }
-        }
-
-      }
-
-    },
-
-    interaction:{
-      intersect:false,
-      mode:'index'
-    }
-
-  };
-
+  results.style.display = 'block';
 }
 
 </script>
-
 </body>
 </html>
