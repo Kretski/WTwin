@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>W-Twin — local monitor</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <style>
   :root{
     --bg:#0A0D12;
@@ -181,6 +181,10 @@ function showError(msg){
 
 function handleFile(file){
   errorBox.style.display = 'none';
+  if (typeof Chart === 'undefined') {
+    showError('Chart library failed to load (likely blocked by an ad blocker or content blocker). Try disabling it for this page, or use a different browser.');
+    return;
+  }
   const reader = new FileReader();
   reader.onload = e => {
     try {
