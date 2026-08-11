@@ -115,7 +115,8 @@
 
     <div class="verdict-row">
       <div class="stat"><div class="k">Steps loaded</div><div class="v" id="statN">—</div></div>
-      <div class="stat"><div class="k">First alert</div><div class="v" id="statAlert">—</div></div>
+      <div class="stat"><div class="k">First flag (raw)</div><div class="v" id="statAlert">—</div></div>
+      <div class="stat"><div class="k">First sustained alert</div><div class="v" id="statSustained">—</div></div>
       <div class="stat"><div class="k">Total flagged points</div><div class="v" id="statCount">—</div></div>
       <div class="stat"><div class="k">Verdict</div><div class="v" id="statVerdict">—</div></div>
     </div>
@@ -127,6 +128,7 @@
         <span><i class="sw" style="background:var(--actual)"></i>Observed loss</span>
         <span><i class="sw" style="background:var(--predicted);border-top:2px dashed var(--predicted)"></i>Expected (scaling law)</span>
         <span><i class="sw" style="background:var(--alert-strong)"></i>Flagged point</span>
+        <span><i class="sw" style="background:#FFD23F"></i>Sustained alert onset</span>
       </div>
       <div class="legend" id="fitWindowNote" style="margin-top:-4px;"></div>
     </div>
@@ -141,13 +143,15 @@
     </div>
 
     <p class="method-note">
-      <b>How to read this:</b> when W(t) crosses above zero, the observed
-      curve is diverging from the forecast more than normal training noise
-      would explain. The method is validated on nano-GPT (842K params) with
-      100% detection of progressive drift vs. 0% for CUSUM/fixed threshold
-      on the same scenario — see the <b>paper</b> for full results and
-      limitations. This gives you a directional read on your specific log,
-      not a guaranteed diagnosis.
+      <b>How to read this:</b> "First flag (raw)" is the very first point
+      where W(t) crosses zero — this can be a single noisy point, not a
+      real signal. "First sustained alert" requires 5 consecutive flagged
+      points and is the more reliable indicator; the verdict above is based
+      on this, not the raw count. The method is validated on nano-GPT
+      (842K params) with 100% detection of progressive drift vs. 0% for
+      CUSUM/fixed threshold on the same scenario — see the <b>paper</b> for
+      full results and limitations. This gives you a directional read on
+      your specific log, not a guaranteed diagnosis.
     </p>
   </div>
 
@@ -292,22 +296,36 @@ function wTwinAnalyze(steps, loss){
   let firstAlert = null, alertCount = 0;
   for (let i=0;i<flags.length;i++) if (flags[i]){ alertCount++; if (firstAlert===null) firstAlert = steps[i]; }
 
-  return {predicted, Q, D, T, W, flags, firstAlert, alertCount, nFit};
+  // Sustained alert: first point where N consecutive flags occur.
+  // A single noisy flagged point is not the same as a real, holding signal —
+  // this distinguishes the two instead of reporting raw first-flag alone.
+  const SUSTAIN_N = 5;
+  let firstSustainedAlert = null, sustainedIdx = null;
+  for (let i=0;i<=flags.length-SUSTAIN_N;i++){
+    let allFlagged = true;
+    for (let k=0;k<SUSTAIN_N;k++) if (!flags[i+k]) { allFlagged = false; break; }
+    if (allFlagged) { firstSustainedAlert = steps[i]; sustainedIdx = i; break; }
+  }
+
+  return {predicted, Q, D, T, W, flags, firstAlert, alertCount, nFit,
+          firstSustainedAlert, sustainedIdx};
 }
 
 function renderResults(steps, loss, a){
   document.getElementById('statN').textContent = steps.length;
   document.getElementById('statAlert').textContent = a.firstAlert !== null ? ('step ' + a.firstAlert) : '—';
+  document.getElementById('statSustained').textContent = a.firstSustainedAlert !== null ? ('step ' + a.firstSustainedAlert) : 'none';
   document.getElementById('statCount').textContent = a.alertCount;
 
   const verdictEl = document.getElementById('statVerdict');
-  if (a.alertCount === 0){
+  if (a.firstSustainedAlert === null){
     verdictEl.textContent = 'Clean'; verdictEl.className = 'v good';
   } else {
     verdictEl.textContent = 'Drift flagged'; verdictEl.className = 'v alert';
   }
 
   const alertPoints = loss.map((l,i)=> a.flags[i] ? l : null);
+  const sustainedPoint = loss.map((l,i)=> (a.sustainedIdx !== null && i === a.sustainedIdx) ? l : null);
 
   if (lossChartInstance) lossChartInstance.destroy();
   if (wChartInstance) wChartInstance.destroy();
@@ -324,7 +342,9 @@ function renderResults(steps, loss, a){
         { label:'Expected', data:a.predicted, borderColor:'#5B7A99', borderWidth:1.4,
           borderDash:[4,3], pointRadius:0, tension:0.15 },
         { label:'Flagged', data:alertPoints, borderColor:'#FF6B4A',
-          backgroundColor:'#FF6B4A', pointRadius:2.5, showLine:false }
+          backgroundColor:'#FF6B4A', pointRadius:2.5, showLine:false },
+        { label:'Sustained alert onset', data:sustainedPoint, borderColor:'#FFD23F',
+          backgroundColor:'#FFD23F', pointRadius:7, pointStyle:'rectRot', showLine:false }
       ]},
     options: chartOpts(gridColor, tickColor)
   });
