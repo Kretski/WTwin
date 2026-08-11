@@ -128,6 +128,7 @@
         <span><i class="sw" style="background:var(--predicted);border-top:2px dashed var(--predicted)"></i>Expected (scaling law)</span>
         <span><i class="sw" style="background:var(--alert-strong)"></i>Flagged point</span>
       </div>
+      <div class="legend" id="fitWindowNote" style="margin-top:-4px;"></div>
     </div>
 
     <div class="panel">
@@ -281,12 +282,17 @@ function wTwinAnalyze(steps, loss){
   const T = meanR + 2*sdR;
 
   const W = D.map((d,i) => Q[i]*d - T);
-  const flags = W.map(w => w > 0);
+  // Exclude the fit-calibration window (first nFit points) from flagging —
+  // those points were used to fit the baseline itself, so evaluating W
+  // against them is circular and produces spurious early false positives
+  // (the sharp early-training loss drop is hard to fit exactly, which
+  // otherwise shows up as a fake "day-1" alert).
+  const flags = W.map((w,i) => w > 0 && i >= nFit);
 
   let firstAlert = null, alertCount = 0;
   for (let i=0;i<flags.length;i++) if (flags[i]){ alertCount++; if (firstAlert===null) firstAlert = steps[i]; }
 
-  return {predicted, Q, D, T, W, flags, firstAlert, alertCount};
+  return {predicted, Q, D, T, W, flags, firstAlert, alertCount, nFit};
 }
 
 function renderResults(steps, loss, a){
@@ -336,6 +342,9 @@ function renderResults(steps, loss, a){
   });
 
   results.style.display = 'block';
+  document.getElementById('fitWindowNote').innerHTML =
+    '<span style="color:var(--muted)">Steps 1–' + steps[a.nFit-1] +
+    ' used to calibrate the baseline fit — excluded from flagging (not evaluated for drift).</span>';
   results.scrollIntoView({behavior:'smooth', block:'start'});
 }
 
