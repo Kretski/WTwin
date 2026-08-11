@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>W-Twin — local monitor</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0A0D12;
+    --panel:#12161F;
+    --panel-2:#161B26;
+    --line:#232936;
+    --text:#E6E9EF;
+    --muted:#7C8698;
+    --actual:#4FD1C5;
+    --predicted:#5B7A99;
+    --alert:#F2A93B;
+    --alert-strong:#FF6B4A;
+    --good:#5FD08C;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
+    font-family:'IBM Plex Mono','Space Mono',monospace;}
+  .display{font-family:'Space Grotesk','IBM Plex Sans',sans-serif;}
+
+  .wrap{max-width:960px;margin:0 auto;padding:48px 24px 96px;}
+
+  header{margin-bottom:40px;}
+  .eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--actual);margin:0 0 10px;}
+  h1{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:34px;
+    line-height:1.15;margin:0 0 12px;letter-spacing:-.01em;}
+  .sub{color:var(--muted);font-size:14px;line-height:1.6;max-width:60ch;}
+  .sub b{color:var(--text);font-weight:600;}
+
+  .dropzone{
+    margin-top:32px;
+    border:1px dashed var(--line);
+    border-radius:2px;
+    background:var(--panel);
+    padding:40px 24px;
+    text-align:center;
+    cursor:pointer;
+    transition:border-color .15s ease, background .15s ease;
+  }
+  .dropzone.drag{border-color:var(--actual);background:var(--panel-2);}
+  .dropzone .dz-title{font-family:'Space Grotesk',sans-serif;font-size:16px;
+    font-weight:600;margin-bottom:6px;}
+  .dropzone .dz-hint{color:var(--muted);font-size:12.5px;}
+  .dropzone input{display:none;}
+  .dz-icon{width:28px;height:28px;margin:0 auto 14px;opacity:.6;}
+
+  .privacy{display:flex;align-items:center;gap:8px;margin-top:14px;
+    color:var(--good);font-size:11.5px;letter-spacing:.02em;}
+  .privacy .dot{width:6px;height:6px;border-radius:50%;background:var(--good);
+    flex:0 0 auto;}
+
+  #results{display:none;margin-top:48px;}
+
+  .verdict-row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:28px;}
+  .stat{flex:1;min-width:150px;background:var(--panel);border:1px solid var(--line);
+    border-radius:2px;padding:16px 18px;}
+  .stat .k{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--muted);margin-bottom:8px;}
+  .stat .v{font-family:'Space Grotesk',sans-serif;font-size:24px;font-weight:600;}
+  .stat .v.alert{color:var(--alert-strong);}
+  .stat .v.good{color:var(--good);}
+
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:2px;
+    padding:20px 20px 8px;margin-bottom:20px;}
+  .panel h2{font-family:'Space Grotesk',sans-serif;font-size:13px;
+    text-transform:uppercase;letter-spacing:.1em;color:var(--muted);
+    margin:0 0 16px;font-weight:600;}
+  .chart-box{position:relative;height:260px;}
+
+  .legend{display:flex;gap:18px;flex-wrap:wrap;margin:14px 0 4px;font-size:11.5px;
+    color:var(--muted);}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .sw{width:14px;height:2px;display:inline-block;}
+
+  .method-note{margin-top:28px;font-size:12px;color:var(--muted);line-height:1.7;
+    border-left:2px solid var(--line);padding-left:14px;}
+  .method-note b{color:var(--text);}
+
+  .error-box{display:none;margin-top:20px;background:#241416;border:1px solid #4A2530;
+    color:#FF9E8A;padding:14px 16px;border-radius:2px;font-size:13px;}
+
+  footer{margin-top:56px;color:var(--muted);font-size:11px;text-align:center;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <p class="eyebrow">W-Twin · local monitor</p>
+    <h1 class="display">Drop a CSV. See if the curve is<br>drifting from what's expected.</h1>
+    <p class="sub">W-Twin compares your real loss curve against a scaling-law
+      forecast and flags divergence — <b>before</b> it's visible in the raw
+      numbers. Everything runs right here, in your browser.</p>
+
+    <div class="dropzone" id="dropzone">
+      <svg class="dz-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4">
+        <path d="M4 15v3a2 2 0 002 2h12a2 2 0 002-2v-3M12 3v12M12 3l-4 4M12 3l4 4"/>
+      </svg>
+      <div class="dz-title">Drop your CSV here, or click to browse</div>
+      <div class="dz-hint">Expected columns: step, loss (also accepts iter/epoch, train_loss/val_loss)</div>
+      <input type="file" id="fileInput" accept=".csv">
+    </div>
+    <div class="privacy"><span class="dot"></span> Your file never leaves this browser — no upload, no server.</div>
+    <div class="error-box" id="errorBox"></div>
+  </header>
+
+  <div id="results">
+
+    <div class="verdict-row">
+      <div class="stat"><div class="k">Steps loaded</div><div class="v" id="statN">—</div></div>
+      <div class="stat"><div class="k">First alert</div><div class="v" id="statAlert">—</div></div>
+      <div class="stat"><div class="k">Total flagged points</div><div class="v" id="statCount">—</div></div>
+      <div class="stat"><div class="k">Verdict</div><div class="v" id="statVerdict">—</div></div>
+    </div>
+
+    <div class="panel">
+      <h2>Loss trajectory vs. scaling-law baseline</h2>
+      <div class="chart-box"><canvas id="lossChart"></canvas></div>
+      <div class="legend">
+        <span><i class="sw" style="background:var(--actual)"></i>Observed loss</span>
+        <span><i class="sw" style="background:var(--predicted);border-top:2px dashed var(--predicted)"></i>Expected (scaling law)</span>
+        <span><i class="sw" style="background:var(--alert-strong)"></i>Flagged point</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>W(t) = Q(t)·D(t) − T(t)</h2>
+      <div class="chart-box"><canvas id="wChart"></canvas></div>
+      <div class="legend">
+        <span><i class="sw" style="background:var(--alert)"></i>W(t)</span>
+        <span><i class="sw" style="background:var(--line)"></i>Threshold (W=0)</span>
+      </div>
+    </div>
+
+    <p class="method-note">
+      <b>How to read this:</b> when W(t) crosses above zero, the observed
+      curve is diverging from the forecast more than normal training noise
+      would explain. The method is validated on nano-GPT (842K params) with
+      100% detection of progressive drift vs. 0% for CUSUM/fixed threshold
+      on the same scenario — see the <b>paper</b> for full results and
+      limitations. This gives you a directional read on your specific log,
+      not a guaranteed diagnosis.
+    </p>
+  </div>
+
+  <footer>W-Twin · github.com/Kretski/WTwin · computed locally, nothing is sent anywhere</footer>
+</div>
+
+<script>
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const errorBox = document.getElementById('errorBox');
+const results = document.getElementById('results');
+let lossChartInstance = null, wChartInstance = null;
+
+dropzone.addEventListener('click', () => fileInput.click());
+['dragenter','dragover'].forEach(ev =>
+  dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.add('drag'); }));
+['dragleave','drop'].forEach(ev =>
+  dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.remove('drag'); }));
+dropzone.addEventListener('drop', e => {
+  const f = e.dataTransfer.files[0];
+  if (f) handleFile(f);
+});
+fileInput.addEventListener('change', e => {
+  if (e.target.files[0]) handleFile(e.target.files[0]);
+});
+
+function showError(msg){
+  errorBox.textContent = msg;
+  errorBox.style.display = 'block';
+  results.style.display = 'none';
+}
+
+function handleFile(file){
+  errorBox.style.display = 'none';
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const {steps, loss} = parseCSV(e.target.result);
+      if (steps.length < 20) {
+        showError('The file needs at least 20 rows with valid step/loss values.');
+        return;
+      }
+      const analysis = wTwinAnalyze(steps, loss);
+      renderResults(steps, loss, analysis);
+    } catch (err) {
+      showError('Could not parse file: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function parseCSV(text){
+  const lines = text.trim().split(/\r?\n/);
+  const header = lines[0].split(',').map(h => h.trim().toLowerCase());
+
+  const stepNames = ['step','steps','iter','iteration','epoch'];
+  const lossNames = ['loss','train_loss','training_loss','val_loss'];
+
+  let stepIdx = header.findIndex(h => stepNames.includes(h));
+  let lossIdx = header.findIndex(h => lossNames.includes(h));
+
+  if (lossIdx === -1) throw new Error('no "loss" column found in the header row.');
+
+  const steps = [], loss = [];
+  for (let i = 1; i < lines.length; i++){
+    if (!lines[i].trim()) continue;
+    const cols = lines[i].split(',');
+    const l = parseFloat(cols[lossIdx]);
+    if (isNaN(l)) continue;
+    const s = stepIdx === -1 ? (steps.length + 1) : parseFloat(cols[stepIdx]);
+    steps.push(isNaN(s) ? steps.length + 1 : s);
+    loss.push(l);
+  }
+  return {steps, loss};
+}
+
+// ---- W-Twin core (client-side port of w_twin_detector.py) ----
+function fitPowerLaw(steps, loss, fitFrac=0.3){
+  const nFit = Math.max(5, Math.floor(steps.length * fitFrac));
+  const tFit = steps.slice(0, nFit), yFit = loss.slice(0, nFit);
+  const c0 = Math.max(Math.min(...yFit) * 0.5, 1e-6);
+
+  let best = null;
+  for (let k=0;k<=14;k++){
+    const c = (c0*2) * (k/14);
+    const y = yFit.map(v => Math.max(v - c, 1e-8));
+    const logT = tFit.map(t => Math.log(t+1));
+    const logY = y.map(v => Math.log(v));
+    const n = logT.length;
+    const sumX=logT.reduce((a,b)=>a+b,0), sumY=logY.reduce((a,b)=>a+b,0);
+    const sumXY=logT.reduce((a,t,i)=>a+t*logY[i],0);
+    const sumXX=logT.reduce((a,t)=>a+t*t,0);
+    const slope=(n*sumXY-sumX*sumY)/(n*sumXX-sumX*sumX);
+    const intercept=(sumY-slope*sumX)/n;
+    const a=Math.exp(intercept), alpha=-slope;
+    const pred=tFit.map(t=>a*Math.pow(t+1,-alpha)+c);
+    const err=pred.reduce((s,p,i)=>s+(p-yFit[i])**2,0);
+    if (!best || err<best.err) best={err,a,alpha,c};
+  }
+  const predFit = tFit.map(t=>best.a*Math.pow(t+1,-best.alpha)+best.c);
+  const meanY = yFit.reduce((a,b)=>a+b,0)/yFit.length;
+  const ssTot = yFit.reduce((s,y)=>s+(y-meanY)**2,0);
+  const ssRes = predFit.reduce((s,p,i)=>s+(p-yFit[i])**2,0);
+  const r2 = ssTot>0 ? 1-ssRes/ssTot : 0;
+
+  return {a:best.a, alpha:best.alpha, c:best.c, r2, nFit,
+    predict:(t)=>best.a*Math.pow(t+1,-best.alpha)+best.c};
+}
+
+function wTwinAnalyze(steps, loss){
+  const fit = fitPowerLaw(steps, loss);
+  const predicted = steps.map(t => fit.predict(t));
+  const nFit = fit.nFit;
+
+  const horizon = steps[nFit-1] - steps[0] + 1;
+  const Q = steps.map(t => {
+    const extrap = Math.max(t - steps[nFit-1], 0);
+    const decay = Math.exp(-extrap/(3*horizon));
+    return Math.max(0, Math.min(1, fit.r2)) * decay;
+  });
+
+  const D = loss.map((l,i) => Math.abs(l - predicted[i]) / Math.max(Math.abs(predicted[i]), 1e-8));
+
+  const residFit = [];
+  for (let i=0;i<nFit;i++) residFit.push(Math.abs(loss[i]-predicted[i])/Math.max(Math.abs(predicted[i]),1e-8));
+  const meanR = residFit.reduce((a,b)=>a+b,0)/residFit.length;
+  const sdR = Math.sqrt(residFit.reduce((s,r)=>s+(r-meanR)**2,0)/residFit.length);
+  const T = meanR + 2*sdR;
+
+  const W = D.map((d,i) => Q[i]*d - T);
+  const flags = W.map(w => w > 0);
+
+  let firstAlert = null, alertCount = 0;
+  for (let i=0;i<flags.length;i++) if (flags[i]){ alertCount++; if (firstAlert===null) firstAlert = steps[i]; }
+
+  return {predicted, Q, D, T, W, flags, firstAlert, alertCount};
+}
+
+function renderResults(steps, loss, a){
+  document.getElementById('statN').textContent = steps.length;
+  document.getElementById('statAlert').textContent = a.firstAlert !== null ? ('step ' + a.firstAlert) : '—';
+  document.getElementById('statCount').textContent = a.alertCount;
+
+  const verdictEl = document.getElementById('statVerdict');
+  if (a.alertCount === 0){
+    verdictEl.textContent = 'Clean'; verdictEl.className = 'v good';
+  } else {
+    verdictEl.textContent = 'Drift flagged'; verdictEl.className = 'v alert';
+  }
+
+  const alertPoints = loss.map((l,i)=> a.flags[i] ? l : null);
+
+  if (lossChartInstance) lossChartInstance.destroy();
+  if (wChartInstance) wChartInstance.destroy();
+
+  const gridColor = '#1B212C';
+  const tickColor = '#7C8698';
+
+  lossChartInstance = new Chart(document.getElementById('lossChart'), {
+    type: 'line',
+    data: { labels: steps,
+      datasets: [
+        { label:'Observed loss', data:loss, borderColor:'#4FD1C5', borderWidth:1.6,
+          pointRadius:0, tension:0.15 },
+        { label:'Expected', data:a.predicted, borderColor:'#5B7A99', borderWidth:1.4,
+          borderDash:[4,3], pointRadius:0, tension:0.15 },
+        { label:'Flagged', data:alertPoints, borderColor:'#FF6B4A',
+          backgroundColor:'#FF6B4A', pointRadius:2.5, showLine:false }
+      ]},
+    options: chartOpts(gridColor, tickColor)
+  });
+
+  wChartInstance = new Chart(document.getElementById('wChart'), {
+    type: 'line',
+    data: { labels: steps,
+      datasets: [
+        { label:'W(t)', data:a.W, borderColor:'#F2A93B', borderWidth:1.4,
+          pointRadius:0, tension:0.1, fill:false },
+        { label:'Threshold', data: steps.map(()=>0), borderColor:'#2A3140',
+          borderWidth:1, pointRadius:0, borderDash:[2,3] }
+      ]},
+    options: chartOpts(gridColor, tickColor)
+  });
+
+  results.style.display = 'block';
+  results.scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+function chartOpts(gridColor, tickColor){
+  return {
+    responsive:true, maintainAspectRatio:false,
+    plugins:{ legend:{display:false} },
+    scales:{
+      x:{ grid:{color:gridColor}, ticks:{color:tickColor, maxTicksLimit:10, font:{size:10}} },
+      y:{ grid:{color:gridColor}, ticks:{color:tickColor, font:{size:10}} }
+    },
+    interaction:{ intersect:false, mode:'index' }
+  };
+}
+</script>
+</body>
+</html>
