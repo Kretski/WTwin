@@ -41,12 +41,12 @@ wtwin demo
 
 From the [paper](https://doi.org/10.5281/zenodo.21842460) — real nano-GPT training runs:
 
-| Experiment           | Runs          | W-Twin             | Threshold | CUSUM                 |
-| -------------------- | ------------- | ------------------ | --------- | --------------------- |
-| Progressive drift    | 9             | **9/9 (100%)**     | 0/9 (0%)  | 0/9 (0%)              |
+| Experiment           | Runs          | W-Twin                                      | Threshold | CUSUM                 |
+| -------------------- | ------------- | ------------------------------------------- | --------- | --------------------- |
+| Progressive drift    | 9             | **9/9 (100%)**                              | 0/9 (0%)  | 0/9 (0%)              |
 | Mean detection delay | —             | **257 steps (SD=67, CI: [209, 305], n=10)** | —         | —                     |
-| False alarm rate     | 30 clean runs | **0/30 (0%)**      | 0/30      | 0/30                  |
-| Abrupt spike         | 2             | 2/2 (+5 steps)     | 0/2       | 2/2 (+1 step, faster) |
+| False alarm rate     | 30 clean runs | **0/30 (0%)**                               | 0/30      | 0/30                  |
+| Abrupt spike         | 2             | 2/2 (+5 steps)                              | 0/2       | 2/2 (+1 step, faster) |
 
 W-Twin is the only method that detects progressive drift.  
 For sudden spikes, CUSUM is faster — the two are complementary.
@@ -131,7 +131,7 @@ wtwin monitor wandb_export.csv --loss-col train/loss --step-col _step
 wtwin monitor training_log.csv --output wtwin_scores.csv
 wtwin demo
 ```
-Try it without installing  demo
+
 ### CLI — detect + classify + suggest *(v1.2)*
 
 ```bash
@@ -251,7 +251,9 @@ Full details in Section 8 of the [paper](https://doi.org/10.5281/zenodo.21842460
 
 ## Did it work for you?
 
-If you ran W-Twin on a real training log — whether it detected something or missed it — please open an [issue](https://github.com/Kretski/WTwin/issues).
+If you ran W-Twin on a real training log — whether it detected something or missed it — please share the result.
+
+[👉 Report a result (2 minutes)](https://github.com/Kretski/WTwin/issues/new?title=Result+report&body=**Log+size+%28steps%29:**+%0A**Detected:**+yes+/+no%0A**First+alert+step:**+%0A**True+failure+step+%28if+known%29:**+%0A**Notes:**+)
 
 One data point from a real run is worth more than 10 synthetic experiments.
 
