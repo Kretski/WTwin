@@ -112,3 +112,19 @@ Author: Dimitar Kretski
 Center for Hydro- and Aerodynamics, Varna, Bulgaria
 ORCID: 0000-0001-5108-2243
 text
+## Open Source & Commercial
+
+The core of W-Twin is open source under the MIT license so anyone can try it quickly.
+
+**What is included for free:**
+- Core `WTwinMonitor`
+- CLI tools
+- Basic integrations (HuggingFace, simple W&B logging)
+- Browser demo
+
+**For production use and advanced features:**
+- Improved calibration (lower false positives)
+- Better failure classification (`suggest`)
+- Priority support and help with integration
+
+If you are using W-Twin in a real training pipeline and need higher reliability or help deploying it, feel free to reach out: **kretski1@gmail.com**
