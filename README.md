@@ -1,8 +1,9 @@
-W-Twin
+# W-Twin
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21842460.svg)](https://doi.org/10.5281/zenodo.21842460)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Browser-blue)](https://kretski.github.io/WTwin/)
 
 **Detect progressive training degradation before it becomes visible in your loss curve.**
 
@@ -13,6 +14,14 @@ It is designed as a lightweight, complementary layer on top of existing tools (W
 
 ---
 
+### Try it instantly (no install)
+
+**Live browser demo:** [https://kretski.github.io/WTwin/](https://kretski.github.io/WTwin/)
+
+Drop a CSV with `step` and `loss` columns. Everything runs locally in your browser — no upload, no server.
+
+---
+
 ## Why it matters
 
 You are training for days. On day 2 the run starts drifting.  
@@ -20,11 +29,11 @@ The loss still looks “normal” locally. You discover the problem only on day 
 
 W-Twin is built exactly for this case: **gradual, progressive degradation** that reactive monitors (threshold, CUSUM) often miss.
 
-| Experiment              | W-Twin          | Threshold | CUSUM     |
-|-------------------------|-----------------|-----------|-----------|
-| Progressive drift       | **9/9 (100%)**  | 0/9       | 0/9       |
-| Mean detection delay    | **257 steps**   | —         | —         |
-| False alarms (clean)    | **0/30**        | 0/30      | 0/30      |
+| Experiment              | W-Twin          | Threshold | CUSUM          |
+|-------------------------|-----------------|-----------|----------------|
+| Progressive drift       | **9/9 (100%)**  | 0/9       | 0/9            |
+| Mean detection delay    | **257 steps**   | —         | —              |
+| False alarms (clean)    | **0/30**        | 0/30      | 0/30           |
 | Abrupt spike            | 2/2             | 0/2       | **2/2** (faster) |
 
 W-Twin and CUSUM are complementary: use both.
@@ -86,7 +95,6 @@ Limitations
 
 Currently validated on nano-GPT scale with synthetic failures
 Power-law baseline assumes generally decreasing loss
-suggest() feature is experimental
 Larger-scale and multi-architecture validation is in progress
 
 Full details in the paper.
