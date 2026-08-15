@@ -13,7 +13,7 @@ W-Twin compares your live loss trajectory against a scaling-law forecast. When t
 It is designed as a lightweight, complementary layer on top of existing tools (Weights & Biases, custom dashboards, HuggingFace Trainer, etc.).
 
 ---
-
+[![Interactive Dashboard](https://img.shields.io/badge/Live%20Demo-Dashboard-blue)](https://kretski.github.io/WTwin/wtwin_demo_dashboard.html)
 ### Try it instantly (no install)
 
 **Live browser demo:** [https://kretski.github.io/WTwin/](https://kretski.github.io/WTwin/)
