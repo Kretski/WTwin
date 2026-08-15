@@ -11,9 +11,8 @@ Lightweight, framework-agnostic, drop-in alongside existing tools (W&B, HuggingF
 * * *
 
 ### Try it instantly (no install)
-[![Demo Dashboard](https://img.shields.io/badge/Demo-Dashboard-orange)](https://kretski.github.io/WTwin/wtwin_demo_dashboard.html)
-**Live browser demo:** [https://kretski.github.io/WTwin/](https://kretski.github.io/WTwin/)
-
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-CSV%20Upload-blue)](https://kretski.github.io/WTwin/)
+[![Dashboard](https://img.shields.io/badge/Demo-W--Twin%20Dashboard-orange)](https://kretski.github.io/WTwin/wtwin_demo_dashboard.html)
 Drop a CSV with `step` and `loss` columns. Everything runs locally — no upload, no server.
 
 * * *
