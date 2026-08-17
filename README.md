@@ -88,7 +88,24 @@ W-Twin was evaluated using a **blind replay protocol** on real EleutherAI Pythia
 * Convergence rate post-alert: 440× slower than pre-alert
 
 > Validated on `wtwin v1.2.0` without parameter tuning between cases.Anomaly onset estimated from rolling slope analysis — not ground-truth labeled.Reproducible: run `wtwin_external_validation.py` on `pythia_anomalous.json`
+## Scale-free warmup experiment
 
+W-Twin warmup parameter was tested across a wide range on real Pythia logs:
+
+| Config | Warmup | Clean FA | Anomaly detected | Lead time |
+|--------|--------|----------|-----------------|-----------|
+| fixed_100 | 100 | ✅ 0 | ✅ step 2,051 | +150 steps |
+| fixed_500 | 500 | ✅ 0 | ✅ step 2,051 | +150 steps |
+| scale_free (0.5% × T) | 71 | ✅ 0 | ✅ step 2,051 | +150 steps |
+| scale_free (1.0% × T) | 143 | ✅ 0 | ✅ step 2,051 | +150 steps |
+| scale_free (0.2% × T) | 50 | ✅ 0 | ✅ step 2,051 | +150 steps |
+
+**Key finding:** W-Twin results are robust across warmup values from 50 to 500 steps.  
+Scale-free warmup `= 0.5% × T_train` produces identical results to fixed warmup=100.  
+No manual tuning required per model size.
+
+> Tested on real Pythia-14M logs (2 runs). Adaptive threshold (`use_adaptive_T=True`)  
+> produced
 * * *
 
 ## Drop-in optimizer wrapper
