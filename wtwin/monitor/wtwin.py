@@ -84,6 +84,8 @@ class WTwinMonitor:
     calibration_frac: float = 0.10
     warmup_steps: int = 50
     use_adaptive_T: bool = False  # False = fixed alpha threshold (more robust)
+    scale_free: bool = False       # If True, warmup_steps = 0.005 × T_train
+    T_train: int = 0               # Total expected training steps (needed if scale_free=True)
 
     # Internal state
     _steps: list[int] = field(default_factory=list, init=False, repr=False)
@@ -98,6 +100,9 @@ class WTwinMonitor:
     _in_alert: bool = field(default=False, init=False, repr=False)
 
     def __post_init__(self):
+        # Scale-free warmup: warmup = 0.5% × T_train
+        if self.scale_free and self.T_train > 0:
+            self.warmup_steps = max(50, int(0.005 * self.T_train))
         # Propagate calibration params to default baseline if it's PowerLawBaseline
         if isinstance(self.baseline, PowerLawBaseline):
             self.baseline.calibration_frac = self.calibration_frac
