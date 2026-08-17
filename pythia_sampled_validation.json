@@ -1,0 +1,75 @@
+{
+  "file": "pythia_sampled.json",
+  "n_points": 14300,
+  "calibration_pct": 0.2,
+  "wtwin_config": {
+    "warmup_steps": 100,
+    "alpha": 2.0,
+    "n_consec": 7,
+    "calibration_frac": 0.1
+  },
+  "baseline_fitted": true,
+  "baseline_coefficients": {
+    "a": 92.37114412680019,
+    "b": 0.8073276515344874,
+    "c": 5.128842163085938
+  },
+  "baseline_mse": 0.0011371715710171509,
+  "wtwin_alert": null,
+  "cusum_alert": null,
+  "threshold_alert": null,
+  "forecast_accuracy": {
+    "mae": 3.27621,
+    "rmse": 3.27679,
+    "bias": -3.27621,
+    "correlation": 0.9393,
+    "n_future": 11440,
+    "pred_sample": [
+      [
+        28601,
+        5.15216
+      ],
+      [
+        40051,
+        5.14661
+      ],
+      [
+        51501,
+        5.14335
+      ],
+      [
+        62951,
+        5.14118
+      ],
+      [
+        74401,
+        5.13962
+      ],
+      [
+        85851,
+        5.13844
+      ],
+      [
+        97301,
+        5.13752
+      ],
+      [
+        108751,
+        5.13678
+      ],
+      [
+        120201,
+        5.13616
+      ],
+      [
+        131651,
+        5.13564
+      ]
+    ]
+  },
+  "W_range": [
+    -105.14,
+    0.0
+  ],
+  "W_negative_pct": 0.9924
+}

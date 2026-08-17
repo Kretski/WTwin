@@ -1,0 +1,75 @@
+{
+  "file": "pythia_anomalous.json",
+  "n_points": 14200,
+  "calibration_pct": 0.2,
+  "wtwin_config": {
+    "warmup_steps": 100,
+    "alpha": 2.0,
+    "n_consec": 7,
+    "calibration_frac": 0.1
+  },
+  "baseline_fitted": true,
+  "baseline_coefficients": {
+    "a": 22675622.092022926,
+    "b": 2.464450882393896,
+    "c": 2.9121011734008793
+  },
+  "baseline_mse": 0.0005247421833445093,
+  "wtwin_alert": 2051,
+  "cusum_alert": null,
+  "threshold_alert": null,
+  "forecast_accuracy": {
+    "mae": 0.10192,
+    "rmse": 0.10727,
+    "bias": -0.10191,
+    "correlation": 0.4694,
+    "n_future": 11360,
+    "pred_sample": [
+      [
+        29401,
+        2.91232
+      ],
+      [
+        40771,
+        2.9122
+      ],
+      [
+        52141,
+        2.91215
+      ],
+      [
+        63511,
+        2.91213
+      ],
+      [
+        74881,
+        2.91212
+      ],
+      [
+        86251,
+        2.91212
+      ],
+      [
+        97621,
+        2.91211
+      ],
+      [
+        108991,
+        2.91211
+      ],
+      [
+        120361,
+        2.91211
+      ],
+      [
+        131731,
+        2.91211
+      ]
+    ]
+  },
+  "W_range": [
+    -11.908,
+    4.894
+  ],
+  "W_negative_pct": 0.9575
+}
