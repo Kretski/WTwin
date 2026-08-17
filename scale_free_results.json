@@ -1,0 +1,50 @@
+[
+  {
+    "config": "fixed_100",
+    "warmup": 100,
+    "clean_fa": null,
+    "clean_W_neg": 1.0,
+    "anom_alert": 2051,
+    "lead_time": 150
+  },
+  {
+    "config": "fixed_500",
+    "warmup": 500,
+    "clean_fa": null,
+    "clean_W_neg": 1.0,
+    "anom_alert": 2051,
+    "lead_time": 150
+  },
+  {
+    "config": "scale_free",
+    "warmup": 71,
+    "clean_fa": null,
+    "clean_W_neg": 1.0,
+    "anom_alert": 2051,
+    "lead_time": 150
+  },
+  {
+    "config": "scale_free_1",
+    "warmup": 143,
+    "clean_fa": null,
+    "clean_W_neg": 1.0,
+    "anom_alert": 2051,
+    "lead_time": 150
+  },
+  {
+    "config": "scale_free_2",
+    "warmup": 50,
+    "clean_fa": null,
+    "clean_W_neg": 1.0,
+    "anom_alert": 2051,
+    "lead_time": 150
+  },
+  {
+    "config": "adaptive_q",
+    "warmup": 71,
+    "clean_fa": 16361,
+    "clean_W_neg": 0.984,
+    "anom_alert": 2051,
+    "lead_time": 150
+  }
+]
