@@ -79,7 +79,23 @@ W-Twin was evaluated using a **blind replay protocol** on real EleutherAI Pythia
 | --- | --- | --- | --- | --- | --- | --- |
 | A — Clean | Pythia-14M normal run | 143,000 | **0 false alarms** | 0   | 0   | r=0.939 forecast correlation |
 | B — Anomalous | Pythia resumed checkpoint (loss stagnated ~2.8) | 143,000 | **Alert @ step 2,051** | no signal | no signal | 150 steps post-onset |
+## Known limitations
 
+**Cosine annealing with restarts:**
+W-Twin with fixed threshold (`use_adaptive_T=False`, default) is robust
+to cosine annealing restarts — pilot test (N=3 seeds) shows 0 false alarms
+at restart points and 3/3 detection after subsequent degradation.
+
+`use_adaptive_T=True` is NOT recommended with cosine restarts — the
+adaptive threshold history is contaminated by the loss jump at restart,
+producing false alarms. Use fixed threshold (default) instead.
+
+**Scale:**
+Validated on Pythia-14M (143K steps). Behavior at 1M+ steps is unknown.
+
+**LR schedules:**
+Designed for monotonically decreasing loss (standard AdamW pretraining).
+RLHF, LoRA, and multi-phase schedules are not validated.
 **Key findings:**
 
 * W-Twin is the only method that detected the anomalous trajectory
