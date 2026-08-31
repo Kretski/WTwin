@@ -234,4 +234,83 @@ The core of W-Twin is MIT-licensed — free to use, modify, and integrate.
       url       = {https://zenodo.org/records/21951979}
     }
 
+```markdown
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21435218.svg)](https://doi.org/10.5281/zenodo.21435218)
+[![License: CC BY 4.0](https://img.shields.io/badge/License-CC_BY_4.0-blue.svg)](https://creativecommons.org/licenses/by/4.0/)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+
+# W-Twin: Forecast-Based Residual Diagnostics & Optimal Transport
+
+**W-Twin** is a deterministic framework for time-series residual monitoring, automated noise conditioning, and signal quality verification in gravitational-wave strain processing.
+
+By integrating **Sliding Wasserstein Distance ($W_1$)**, **Spectral Entropy ($H_{\text{spec}}$)**, and **Cross-Detector Coherence Filtering**, W-Twin evaluates unmodeled residual drift while systematically suppressing false-positive correlation artifacts caused by uncleaned spectral tilt or phase distortion.
+
+---
+
+## Benchmark Case Study: GW150914 Residual Verification
+
+To test diagnostic fidelity against false alarms, W-Twin was benchmarked on LIGO open strain data for event **GW150914** across Hanford ($H_1$) and Livingston ($L_1$) detectors, inspecting residual strain $r(t) = d(t) - h_{\text{template}}(t)$.
+
+### Empirical Results
+
+* **Unconditioned Residual ($H_{\text{spec}} \approx 0.17$):**  
+  Uncleaned low-frequency drift artificially inflates inter-detector correlation, generating a false-positive peak of **$C_{H1, L1} = 0.2774$**.
+* **W-Twin Whitened Gate ($H_{\text{spec}} \approx 0.68$):**  
+  Enforcing spectral entropy normalization restores ideal noise stationarity, collapsing inter-detector coherence to **$C_{H1, L1} = 0.0531$**—completely consistent with uncorrelated baseline noise.
+
+| Pipeline Stage | Spectral Entropy ($H_{\text{spec}}$) | Inter-Detector $C_{H1, L1}$ | Coherence Verdict |
+| :--- | :---: | :---: | :--- |
+| **Unwhitened Residual** | ~0.17 | **0.2774** | False Positive (Low-frequency leakage) |
+| **W-Twin Whitened Gate** | ~0.68 | **0.0531** | **Null / Pure Baseline Noise** |
+
+### Profile Likelihood Scan ($\Lambda$-Dispersion Bounds)
+* **Search Grid:** $\Lambda \in [-1100, +1000]$ (Coarse-to-Fine Grid)
+* **GR Baseline ($\Lambda = 0$):** $\text{SNR}_{H1} = 15.1493$, $\text{SNR}_{L1} = 10.9526$
+* **Log-Likelihood Gain:** $\Delta \ln \mathcal{L} = +0.0060$ ($p \approx 0.99$)
+* **Conclusion:** Confirms strict agreement with General Relativity ($\Lambda = 0$) and proves W-Twin's stability against boundary-hit numerical artifacts.
+
+---
+
+## Quick Start: Spectral Entropy Quality Gate
+
+```python
+import numpy as np
+from scipy.stats import entropy
+
+def compute_spectral_entropy(residual_fd):
+    """
+    Computes normalized spectral entropy H_spec over frequency-domain residual.
+    
+    Returns:
+        H_spec ~ 1.0 : Ideal stationary whitened Gaussian noise.
+        H_spec << 1.0: Presence of non-Gaussian tilt, spectral leakage, or uncleaned lines.
+    """
+    psd = np.abs(residual_fd) ** 2
+    psd_norm = psd / np.sum(psd)
+    return entropy(psd_norm) / np.log(len(psd_norm))
+
+```
+
+---
+
+## Citation & References
+
+If you use W-Twin or the spectral entropy diagnostics in your research, please cite the Zenodo preprint deposit:
+
+```bibtex
+@dataset{kretski_2026_wtwin,
+  author       = {Kretski, Dimitar V.},
+  title        = {{A Transparent, Training-Free Inter-Detector Cross-Correlation Statistic for Short Gravitational-Wave Transients}},
+  month        = jul,
+  year         = 2026,
+  publisher    = {Zenodo},
+  doi          = {10.5281/zenodo.21435218},
+  url          = {[https://doi.org/10.5281/zenodo.21435218](https://doi.org/10.5281/zenodo.21435218)}
+}
+
+```
+
+```
+
+```
 **Author:** Dimitar KretskiCenter for Hydro- and Aerodynamics, Varna, BulgariaORCID: [0000-0001-5108-2243](https://orcid.org/0000-0001-5108-2243)
