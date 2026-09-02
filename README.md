@@ -263,11 +263,12 @@ To test diagnostic fidelity against false alarms, W-Twin was benchmarked on LIGO
 | **Unwhitened Residual** | ~0.17 | **0.2774** | False Positive (Low-frequency leakage) |
 | **W-Twin Whitened Gate** | ~0.68 | **0.0531** | **Null / Pure Baseline Noise** |
 
-### Profile Likelihood Scan ($\Lambda$-Dispersion Bounds)
-* **Search Grid:** $\Lambda \in [-1100, +1000]$ (Coarse-to-Fine Grid)
-* **GR Baseline ($\Lambda = 0$):** $\text{SNR}_{H1} = 15.1493$, $\text{SNR}_{L1} = 10.9526$
-* **Log-Likelihood Gain:** $\Delta \ln \mathcal{L} = +0.0060$ ($p \approx 0.99$)
-* **Conclusion:** Confirms strict agreement with General Relativity ($\Lambda = 0$) and proves W-Twin's stability against boundary-hit numerical artifacts.
+### On-Source vs. Off-Source Z-Score Test (Exploratory)
+* **Search Grid:** $\Lambda \in [-30, +30]$ (step 0.1, 601 templates)
+* **On-Source Result (GW150914):** best-fit $\Lambda_{H1} = \Lambda_{L1} = -30.0$ — **at the grid boundary** (does not converge to an interior maximum)
+* **Off-Source Background:** mean $\Lambda \approx -2.00$, std $\approx 29.93$ (spans nearly the full grid — the fine-perturbation off-source scan is itself largely uninformative at this phase-scale setting)
+* **Z-Score vs. Background:** $H_1$: $z \approx -0.94$, $L_1$: $z \approx -0.94$ — within $1\sigma$ of background, i.e. **not distinguishable from noise**
+* **Status:** Exploratory only. The boundary-hit result means this scan does **not** constrain $\Lambda$ near zero and should **not** be read as a GR-confirmation or profile-likelihood measurement. A properly converging, wider-baseline profile-likelihood scan is planned; until then no $\Lambda$ claim is made from this test.
 
 ---
 
